@@ -1,9 +1,12 @@
-name: Build APK
+name: Build APK and Play bundle
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
+
+env:
+  UPLOAD_KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
 
 jobs:
   build:
@@ -24,13 +27,31 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.9"
+          gradle-version: "8.11.1"
 
-      - name: Build release APK
+      - name: Build direct APK
         working-directory: StatusSaver
-        run: gradle assembleRelease --no-daemon
+        run: gradle assembleDirectRelease --no-daemon
 
       - uses: actions/upload-artifact@v4
         with:
-          name: 548-Status-release-apk
-          path: StatusSaver/app/build/outputs/apk/release/app-release.apk
+          name: 548-Status-direct-apk
+          path: StatusSaver/app/build/outputs/apk/direct/release/app-direct-release.apk
+
+      - name: Build Google Play bundle
+        if: env.UPLOAD_KEYSTORE_BASE64 != ''
+        working-directory: StatusSaver
+        env:
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
+        run: |
+          echo "$UPLOAD_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          export UPLOAD_KEYSTORE_PATH="$RUNNER_TEMP/upload.jks"
+          gradle bundlePlayRelease --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        if: env.UPLOAD_KEYSTORE_BASE64 != ''
+        with:
+          name: 548-Status-play-aab
+          path: StatusSaver/app/build/outputs/bundle/playRelease/app-play-release.aab 
